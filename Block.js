@@ -12,7 +12,7 @@ module.exports = class Block {
         this.difficulty = difficulty;
         this.hash = hash;
         this.previousHash = previousHash;
-        this.totalSupply = TOTALSUPPLY;
+        // this.totalSupply = TOTALSUPPLY;
     }
 
     static GenesisBlock() {
@@ -63,7 +63,7 @@ module.exports = class Block {
         do {
             time = Date.now();
             nonce++;
-            //difficulty = blockAnterior.timestamp + MINE_RATE > time ? difficulty +1 : difficulty -1
+            difficulty = blockAnterior.timestamp + MINE_RATE > time ? difficulty +1 : difficulty -1
             hash = Block.calculateHash(time, data, nonce, difficulty, previousHash);
         } while (hash.substring(0, difficulty) !== Array(difficulty + 1).join("0"));
 

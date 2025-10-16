@@ -2,17 +2,18 @@
 //import { Transaction } from "./Transaction";
 const Block = require('./Block');
 const Transaction = require('./Transaction');
+const {saveJsonFile, readJsonFilesFromFolder} = require('./SaveJsonFile');
 
 class Blockchain {
     constructor() {
-        //chain caddena se puede jalar de una db
+        //chain caddena se puede jalar de una db en caso de no tener nada insertar genesis
         this.chain = [Block.GenesisBlock()];
         this.pendingTransactions = [];
-        this.giftForMiner = 1000;
+        this.giftForMiner = 0.00000001;
     }
 
     addTransactions(Transaction) {
-        if (this.getAmountTotal(Transaction.from) > 0) {
+        if (this.getAmountTotal(Transaction.from) > 0 || Transaction.from == 'system money' || Transaction.from == 'purchase of money') {
             this.pendingTransactions.push(Transaction);
         } else {
             console.log('sin saldo para transaccion ' +Transaction.from);
@@ -20,15 +21,22 @@ class Blockchain {
     }
 
     dineroSystema(toMiner, amount) {
-        const transacionRegalo = new Transaction('System', toMiner, amount, 'Mint');
+        this.addTransactions(new Transaction('system money', toMiner, amount, 'Mint'))
+        // const transacionRegalo = new Transaction('system money', toMiner, amount, 'Mint');
+        // this.addBlock([transacionRegalo]);
+    }
+
+    dineroCompra(toMiner, amount) {
+        const transacionRegalo = new Transaction('purchase of money', toMiner, amount, 'Purchase');
         this.addBlock([transacionRegalo]);
     }
 
     minarPendingTransactions(toMiner) {
         if (this.pendingTransactions.length > 0) {
-            this.addBlock(this.pendingTransactions);
-
-            this.dineroSystema(toMiner, this.giftForMiner);
+            const pendingTransactions = [...this.pendingTransactions];
+            this.pendingTransactions = [];
+            this.addBlock(pendingTransactions);
+            this.dineroSystema(toMiner, this.giftForMiner * parseInt(pendingTransactions.length));
         } else {
             console.log('no puede minar');
         }
@@ -39,20 +47,15 @@ class Blockchain {
     }
 
     getAmountTotal(from){
-        let total = 0;
-        for (let i = 1; i < this.chain.length; i++) {
-            for (let e = 0; e < this.chain[i].data.length; e++) {
-                this.chain[i].data[e];
-                
-                if (this.chain[i].data[e].from == from) {
-                    total = total -this.chain[i].data[e].amount
-                } else if (this.chain[i].data[e].to == from) {
-                    total = total +this.chain[i].data[e].amount
-                }
-            }
-        }
-
-        return total;
+        // hacer consulta en la db
+        return this.chain
+            .slice(1) // 1️⃣ Ignora el bloque génesis
+            .flatMap(block => block.data) // 2️⃣ Aplana todas las transacciones de todos los bloques en un solo array
+            .reduce((total, tx) => { // 3️⃣ Acumula el saldo del usuario
+                if (tx.from === from) total -= tx.amount; // Si el usuario envió, resta
+                if (tx.to === from) total += tx.amount;   // Si el usuario recibió, suma
+                return total; // Devuelve el total acumulado
+            }, 0);
     }
 
     validateChain(){
@@ -74,8 +77,25 @@ class Blockchain {
         const blockAnterior = this.getUltimoBlock();
         let newBlock = Block.mineBlock(blockAnterior, data);
         this.chain.push(newBlock);
+        if (!this.validateChain()) {
+            console.warn('cadena corronpida intentar');
+            this.chain.pop();
+            // como no es valida traer la chain de la db
+        } else {
+            // hacer insercion y refrescar chain
+            console.log('cadena valida');
+        }
+
         return newBlock;
     }
+}
+
+function stringToHex(str, length = 20, base = 17) {
+    let hash = 0n;
+    for (let i = 0; i < str.length; i++) {
+        hash = BigInt(hash) * base + str.charCodeAt(i);
+    }
+    return `0x${hash.toString(16).padEnd(length, "0")}`;
 }
 
 let fungible = {
@@ -152,19 +172,33 @@ let nofungibles = {
 
 let bc = new Blockchain();
 
-bc.dineroSystema('liontumbler', 25000)
+bc.dineroCompra('liontumbler', 25000.001)
 
 bc.addTransactions(new Transaction('liontumbler', 'mechas', 500));
 bc.addTransactions(new Transaction('liontumbler', 'mechas', 500));
 
-//minar
+console.log(bc.getAmountTotal('liontumbler'), 'edwin')
+console.log(bc.getAmountTotal('mechas'), 'mahecha')
+
+console.log('minando...');
 bc.minarPendingTransactions('liontumbler');
+console.log('termino');
+
+console.log('minando...');
+bc.minarPendingTransactions('mechas');
+console.log('termino');
+
+console.log('transacciones pendientes', bc.pendingTransactions);
 
 //salodo
 console.log(bc.getAmountTotal('liontumbler'), 'uno')
 console.log(bc.getAmountTotal('mechas'), 'dos')
 
-console.log(bc.chain, 'rrr')
-for (const i in bc.chain) {
-    console.log(bc.chain[i].data, 'tres')
-}
+// for (const i in bc.chain) {
+//     console.log(bc.chain[i]/*.data*/, 'tres')
+// }
+
+saveJsonFile('edwin', bc.chain)
+
+console.log('dta', readJsonFilesFromFolder());
+
